@@ -5,7 +5,7 @@ class Data {
   String? shift;
   String? technology;
 
-  Data({this.id, this.name, this.roll, this.shift, this.technology});
+  Data(this.id, this.name, this.roll, this.shift, this.technology);
 
   Data.fromJson(Map<dynamic, dynamic> json) {
     id = json['Id'];

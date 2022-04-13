@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:mysql_practice/bloc/studentBloc.dart';
 import 'package:mysql_practice/constraints/api_link.dart';
-import 'package:mysql_practice/data.dart';
+import 'package:mysql_practice/model/data.dart';
 import 'package:http/http.dart' as http;
 
 class Homepage extends StatefulWidget {
@@ -20,68 +20,6 @@ class _HomepageState extends State<Homepage> {
   TextEditingController controller3=TextEditingController();
   TextEditingController controller4=TextEditingController();
   TextEditingController controller5=TextEditingController();
-  List<Data> dataList=[];
-
-  Future<List<Data>> getData()async{
-    final response=await http.get(Uri.parse("${api+getAll}"));
-    var data;
-    if(response.statusCode==200){
-      dataList=[];
-      data=jsonDecode(response.body.toString());
-      for(Map i in data){
-        dataList.add(Data.fromJson(i));
-      }
-      return dataList;
-    }
-    else{
-      throw Exception('No data found');
-    }
-  }
-
-  Future<String> AddData(String id,String name,String roll,String shift, String technology)async{
-    var map=Map<String,dynamic>();
-    map['Id']='$id';
-    map['Name']='$name';
-    map['Roll']='$roll';
-    map['Shift']='$shift';
-    map['Technology']='$technology';
-    final response=await http.post(Uri.parse("${api+addData}"),body: map);
-    if(response.statusCode==200){
-      return response.body;
-    }
-    else{
-      return 'Error';
-    }
-  }
-
-  Future<String> UpdateData(String id,String name,String roll,String shift, String technology)async{
-    var map=Map<String,dynamic>();
-    map['Id']='$id';
-    map['Name']='$name';
-    map['Roll']='$roll';
-    map['Shift']='$shift';
-    map['Technology']='$technology';
-    final response=await http.post(Uri.parse("${api+updateData}"),body: map);
-    if(response.statusCode==200){
-      return response.body;
-    }
-    else{
-      return 'Error';
-    }
-  }
-
-  Future<String> DeleteData(String id)async{
-    var map=Map<String,dynamic>();
-    map['Id']='$id';
-    final response=await http.post(Uri.parse("${api+deleteData}"),body: map);
-    if(response.statusCode==200){
-      return response.body;
-    }
-    else{
-      return 'Error';
-    }
-  }
-
 
 @override
   void dispose() {
@@ -100,13 +38,16 @@ class _HomepageState extends State<Homepage> {
 
   void refreshData(){
     setState(() {
-      getData();
+      studentBloc.getData();
     });
   }
+
+  final studentBloc=StudentBloc();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Text('MySql Practice'),
         actions: [
@@ -163,15 +104,15 @@ class _HomepageState extends State<Homepage> {
                 SizedBox(height: 5,),
                 Row(
                   children: [
-                    TextButton(onPressed: (){
-                      AddData(controller1.text, controller2.text, controller3.text, controller4.text, controller5.text);
+                    TextButton(onPressed: ()async {
+                      var s=await studentBloc.addStudent(Data(controller1.text, controller2.text, controller3.text, controller4.text, controller5.text));
+                      print(s);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
                       clear_controller();
-                      refreshData();
                     }, child: Text('Add')),
                     TextButton(onPressed: (){
-                      UpdateData(controller1.text, controller2.text, controller3.text, controller4.text, controller5.text);
+                      studentBloc.updateStudent(Data(controller1.text, controller2.text, controller3.text, controller4.text, controller5.text));
                       clear_controller();
-                      refreshData();
                     }, child: Text('Update')),
                     TextButton(onPressed: (){
                       controller1.clear();
@@ -186,40 +127,42 @@ class _HomepageState extends State<Homepage> {
             ),
           ),
           Expanded(
-              child: FutureBuilder<List<Data>>(
-                future: getData(),
+              child: StreamBuilder(
+                stream: studentBloc.students,
                 builder: (context,AsyncSnapshot<List<Data>> snapshot){
-                  if(snapshot.hasData){
+                  if(snapshot.connectionState==ConnectionState.waiting){
+                    return CircularProgressIndicator();
+                  }
+                  else if(snapshot.hasData){
                     return ListView.builder(
-                        itemCount: dataList.length,
+                        itemCount:snapshot.data!.length,
                         itemBuilder: (context, index) {
-                      return ListTile(
-                        title: Text(dataList[index].name.toString(),),
-                        leading: Text(dataList[index].id.toString()),
-                        trailing: IconButton(
-                          onPressed: (){
-                            DeleteData(dataList[index].id.toString());
-                            refreshData();
-                          },
-                          icon: Icon(Icons.delete),
-                        ),
-                        subtitle: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            Expanded(child: Text(dataList[index].roll.toString())),
-                            Expanded(child: Text(dataList[index].shift.toString())),
-                            Expanded(child: Text(dataList[index].technology.toString())),
-                          ],
-                        ),
-                        onTap: (){
-                          controller1.text=dataList[index].id.toString();
-                          controller2.text=dataList[index].name.toString();
-                          controller3.text=dataList[index].roll.toString();
-                          controller4.text=dataList[index].shift.toString();
-                          controller5.text=dataList[index].technology.toString();
-                        },
-                      );
-                    });
+                          return ListTile(
+                            title: Text(snapshot.data![index].name.toString(),),
+                            leading: Text(snapshot.data![index].id.toString()),
+                            trailing: IconButton(
+                              onPressed: (){
+                                studentBloc.deleteStudentById(snapshot.data![index].id.toString());
+                              },
+                              icon: Icon(Icons.delete),
+                            ),
+                            subtitle: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                Expanded(child: Text(snapshot.data![index].roll.toString())),
+                                Expanded(child: Text(snapshot.data![index].shift.toString())),
+                                Expanded(child: Text(snapshot.data![index].technology.toString())),
+                              ],
+                            ),
+                            onTap: (){
+                              controller1.text=snapshot.data![index].id.toString();
+                              controller2.text=snapshot.data![index].name.toString();
+                              controller3.text=snapshot.data![index].roll.toString();
+                              controller4.text=snapshot.data![index].shift.toString();
+                              controller5.text=snapshot.data![index].technology.toString();
+                            },
+                          );
+                        });
                   }
                   else{
                     return Center(child: Text('No Data Found'),);
